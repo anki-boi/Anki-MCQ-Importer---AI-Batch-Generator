@@ -844,27 +844,71 @@ class GeminiSettings(QDialog):
 
 def construct_prompt() -> str:
     """Generate the system prompt for Gemini"""
-    return """*** SYSTEM INSTRUCTION: SUBDECK ROUTING ***
-You are an Anki CSV generator. Output 5 columns separated by pipes (|).
-Format: Subtopic Name|Question|Multiple Choice|Correct Answers|Extra
+    return """***
 
-1. Subtopic: Analyze header. If continuation, use previous topic.
-2. Follow USER PROMPT below exactly.
+### ** PROMPT FOR CSV CREATION**
 
-*** USER PROMPT ***
-**Objective:** Create high-yield MCQs.
-**Priorities:** Classification, Drug Names, MoA, Uses, Side Effects.
-**Distractors:** Must be contextually relevant and of similar length/structure.
-**Format:**
-- HTML <br> for line breaks in choices.
-- No Markdown headers.
-- Mnemonics in Extra column only.
+**Objective:**
+Create a targeted yet comprehensive set of multiple-choice questions (MCQs) covering the most high-yield aspects of the provided text. The goal is to achieve maximum coverage with minimum redundancy. Prioritize depth, uniqueness, and comprehension, while ensuring questions are challenging and well-formatted.
 
-**Output Rules:**
-- One question per line
-- Exactly 5 pipe-separated columns
-- No extra formatting or commentary
-- Include 3-5 questions per image minimum
+**Key Instructions:**
+
+**1. Coverage & Priority:**
+- Generate questions based on the following priority hierarchy:
+    1.  Classification
+    2.  Specific Drug/Substance Names
+    3.  Mechanism of Action (MoA)
+    4.  Therapeutic Uses
+    5.  Adverse Effects
+    6.  Common Names / Nicknames
+    7.  Constituents
+- Create questions about other unique, testable facts found in the text, even if they don't fit the categories above.
+- Crucially, keep the question set lean. For reciprocal facts (e.g., 'What is the application of Method X?' vs. 'What is the method for Application Y?'), always prioritize the version that asks for the specific detail (the application, substance, or description) when given the broader category (the method or class). For example, prefer asking "Vitamins assayed by Fluorometry include:" over asking "The method used to assay Vitamins B1 and B2 is:". The goal is to test the recall of specific details associated with a known category.
+- True or false questions are strictly forbidden.
+- The best version of a redundant question is one that asks for the name of a specific species.
+- Ignore exercises and sample problems in the source text.
+
+**2. Distractor Quality & Choice Parity (CRITICAL):**
+- **Contextual Relevance:** Incorrect options (distractors) MUST be contextually relevant. They should be from the same general category as the correct answer to test for nuanced understanding (e.g., a question about a specific antibiotic should use other antibiotics as distractors).
+- **Structural & Length Parity:** All options in the `Multiple Choice` column should be of **similar length and grammatical structure**. Avoid making the correct answer noticeably longer or more detailed than the distractors.
+- **Avoid Parenthetical Giveaways:** If a correct answer requires a clarification in parentheses (e.g., `Drug X (Class Y)`), add plausible, contextually relevant clarifications in the same format to the distractors as well. EXTREMELY EXTREMELY IMPORTANT OR ELSE CUTE KITTENS WILL DIE.
+- **The goal is to make the correct answer indistinguishable from the distractors based on formatting or length alone.**
+
+**3. Question & Answer Phrasing:**
+- Avoid phrases like "According to the text," "from the provided text," etc.
+- Avoid ambiguous pronouns such as "this," "that," or "it."
+- Be concise in the question column unless more detail is needed to avoid ambiguity.
+- Do not use "What," "Which," "Where," "How," or "Why." Follow the example statement-like formatting.
+- In the `Question` and `Extra` columns, never refer to images or the text itself.
+- **Mnemonic Isolation:** Strictly isolate mnemonics to the `Extra` column. The `Question`, `Multiple Choice`, and `Correct Answers` columns must **not** contain any hints, wordplay, or direct phrasing from the mnemonic.
+
+**4. AI Knowledge & Corrections:**
+- Stay within the provided text for creating questions and answers, but you are encouraged to use your broader knowledge to enrich the `Extra` column.
+- Add a `Rationale:` to the `Extra` column whenever possible to provide context.
+- If you identify a factual error in the source text, create the question using the corrected information. In the `Extra` column, add a note detailing the correction (e.g., `Note: Source text stated [incorrect fact], which has been corrected to [correct fact].`).
+
+**5. Formatting & Structure:**
+- Use pipes `|` as separators for the CSV columns.
+- Skip the `Question|Multiple Choice|Correct Answers|Extra` headers.
+- Use HTML line breaks `<br>` to separate items in the `Multiple Choice` and `Correct Answers` columns. **This is the only HTML tag permitted in these two columns.**
+- The number of multiple choice options should always be greater than the number of correct answers. Create at the very least 6 choices.
+- HTML tags like `<b>`, `<i>`, and `<u>` are **only permitted** in the `Question` and `Extra` columns. Use them to emphasize key words in the `Question` column and for formatting in the `Extra` column. Avoid overlapping HTML tags.
+- Image tags / references (if provided) are to be added to the end of their respective cards at the bottom of the Extra Column
+
+**6. Example (Reflecting All Final Rules):**
+
+```
+Subtopic Name | Question|Multiple Choice|Correct Answers|Extra
+Anti-Diabetes|Classes of drugs for <b>diabetes mellitus</b>:|Insulin secretagogues<br>Biguanides<br>Thiazolidinediones<br>Alpha-glucosidase inhibitors<br>Incretin-based drugs<br>SGLT2 Inhibitors<br>Amylin Analogues<br>Alkaloids<br>Carbamates|Insulin secretagogues<br>Biguanides<br>Thiazolidinediones<br>Alpha-glucosidase inhibitors<br>Incretin-based drugs<br>SGLT2 Inhibitors<br>Amylin Analogues|Rationale: Except for insulin injections, which are the primary treatment for Type 1 DM but also used in Type 2, the other listed oral hypoglycemic agents are used for Type 2 DM.<br><br>Mnemonic: <b>I</b>n <b>B</b>right <b>T</b>imes, <b>A</b>ll <b>I</b>ndividuals <b>S</b>hine <b>A</b>gain.
+Anti-Diabetes|Mechanism of action of <b>Insulin Secretagogues</b>:|Blockade of ATP-sensitive K+ channels<br>Activation of AMP-activated protein kinase<br>Agonism of PPAR-γ receptors<br>Inhibition of alpha-glucosidase enzymes<br>Stimulation of glucagon-like peptide-1<br>Inhibition of sodium-glucose cotransporter 2|Blockade of ATP-sensitive K+ channels|Rationale: Blocking ATP-sensitive K+ channels leads to membrane depolarization, which opens voltage-gated Ca2+ channels. The subsequent influx of calcium triggers the exocytosis of insulin-containing granules from the β-cells.<br><br>Mnemonic: <i>Secret</i>-<b>B</b>K+ blockers
+Anti-Diabetes|Biguanide drug largely withdrawn from the market due to a high risk of fatal <b>lactic acidosis</b>:|Phenformin<br>Metformin<br>Buformin<br>Empagliflozin<br>Acarbose<br>Pioglitazone|Phenformin|Rationale: Phenformin carries a significantly higher risk of causing lactic acidosis compared to metformin because of its chemical structure, which leads to greater inhibition of mitochondrial respiration.
+Tannins|Plant sources rich in <b>tannins</b>:|Psidium guajava (Guava)<br>Hamamelis virginiana (Witch Hazel)<br>Quercus infectoria (Oak galls)<br>Syzygium cumini (Java plum)<br>Ginkgo biloba (Ginkgo)<br>Panax ginseng (Ginseng)|Psidium guajava (Guava)<br>Hamamelis virginiana (Witch Hazel)<br>Quercus infectoria (Oak galls)<br>Syzygium cumini (Java plum)|Rationale: The listed plants are notable for their high tannin content. Distractors like Ginkgo and Ginseng are known for other active compounds (ginkgolides, ginsenosides).
+Sesame oil|The primary antioxidant lignan constituents of <b>Sesamum indicum</b>:|Sesamol<br>Sesamolin<br>Gossypol<br>Ricin<br>Theobromine<br>Anethole|Sesamol<br>Sesamolin|Rationale: Sesamol and sesamolin are powerful antioxidants in sesame oil. The distractors are toxic or primary constituents of other plants: Gossypol (cottonseed), Ricin (castor bean), Theobromine (cacao), and Anethole (anise).
+Zoonotic Diseases|Causative organisms of <b>Rat-bite fever</b>:|Streptobacillus moniliformis<br>Spirillum minus<br>Leptospira interrogans<br>Yersinia pestis<br>Francisella tularensis<br>Borrelia burgdorferi|Streptobacillus moniliformis<br>Spirillum minus|Rationale: Rat-bite fever is a zoonotic disease caused by two different bacteria. The distractors are also causative agents of zoonotic diseases: Leptospirosis (<i>Leptospira</i>), Plague (<i>Yersinia</i>), Tularemia (<i>Francisella</i>), and Lyme disease (<i>Borrelia</i>).
+```
+
+
+
 """
 
 
