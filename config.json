@@ -4,7 +4,7 @@
     "note_type_id": null,
     "github_repo": "anki-boi/True-Anki-MCQ-Note-Template",
     "show_welcome": true,
-    "auto_open_media": true,
+    "auto_open_media": false,
     "batch_size": 10,
     "validate_api_on_startup": false
 }
