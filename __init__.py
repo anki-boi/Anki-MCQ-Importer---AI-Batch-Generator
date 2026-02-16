@@ -210,17 +210,30 @@ def validate_image_file(file_path: str) -> Tuple[bool, str]:
 
 
 def sanitize_deck_name(name: str) -> str:
-    """Remove invalid characters from deck names"""
-    # Remove invalid filesystem characters and Anki-specific reserved chars
-    invalid_chars = r'[\\/:*?"<>|]'
-    sanitized = re.sub(invalid_chars, '', name)
-    sanitized = sanitized.strip()
-
+    """Remove invalid characters from deck names while preserving :: subdeck separators"""
+    # Split on :: to preserve subdeck structure
+    parts = name.split('::')
+    
+    # Sanitize each part individually
+    sanitized_parts = []
+    for part in parts:
+        # Remove invalid filesystem characters (but NOT colons since we already split)
+        invalid_chars = r'[\\/*?"<>|]'
+        sanitized = re.sub(invalid_chars, '', part)
+        sanitized = sanitized.strip()
+        
+        # Only add non-empty parts
+        if sanitized:
+            sanitized_parts.append(sanitized)
+    
+    # Rejoin with ::
+    result = '::'.join(sanitized_parts)
+    
     # Ensure not empty
-    if not sanitized:
-        sanitized = "Imported"
+    if not result:
+        result = "Imported"
 
-    return sanitized
+    return result
 
 # ============================================================================
 # WELCOME WIZARD
