@@ -30,10 +30,8 @@ DEFAULT_NOTE_TYPE_URL = "https://github.com/anki-boi/True-Anki-MCQ-Note-Template
 SUPPORTED_IMAGE_FORMATS = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
 MAX_FILE_SIZE_MB = 20  # Maximum image file size in MB
 GEMINI_MODELS = [
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-pro",
-    "gemini-2.0-flash-exp"
+    "gemini-3-pro-preview",
+    "gemini-3-flash-preview"
 ]
 
 
@@ -41,7 +39,7 @@ GEMINI_MODELS = [
 def get_default_config():
     return {
         "api_key": "",
-        "model": "gemini-1.5-flash",
+        "model": "gemini-3-flash-preview",
         "note_type_id": None,
         "github_repo": DEFAULT_GITHUB_REPO,
         "show_welcome": True,
