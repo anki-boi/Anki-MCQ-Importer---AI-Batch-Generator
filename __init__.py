@@ -11,6 +11,7 @@ import re
 import tempfile
 import traceback
 from typing import Optional, List, Tuple
+import time
 
 from aqt import mw
 from aqt.utils import showInfo, showWarning, askUser, tooltip, getText
@@ -25,6 +26,7 @@ from anki.importing.apkg import AnkiPackageImporter
 ADDON_NAME = "Anki MCQ Importer - AI Batch Generator"
 VERSION = "3.1.0"
 DEFAULT_GITHUB_REPO = "anki-boi/True-Anki-MCQ-Note-Template"
+DEFAULT_NOTE_TYPE_URL = "https://github.com/anki-boi/True-Anki-MCQ-Note-Template/releases/download/v4.25.0/zNote.Updater.apkg"
 SUPPORTED_IMAGE_FORMATS = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
 MAX_FILE_SIZE_MB = 20  # Maximum image file size in MB
 GEMINI_MODELS = [
@@ -118,6 +120,119 @@ def test_api_connection(api_key: str, model: str) -> Tuple[bool, str]:
         return False, f"Network error: {str(e)}. Check your internet connection."
     except Exception as e:
         return False, f"Connection test failed: {str(e)}"
+
+
+def list_generate_models(api_key: str) -> Tuple[bool, List[str], str]:
+    """List available Gemini models that support generateContent."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+
+    models = []
+    next_url = url
+
+    try:
+        while next_url:
+            req = urllib.request.Request(next_url)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                payload = json.loads(response.read().decode())
+
+            for model in payload.get("models", []):
+                name = model.get("name", "")
+                supported = model.get("supportedGenerationMethods", [])
+
+                if "generateContent" not in supported:
+                    continue
+
+                clean_name = name.replace("models/", "")
+                if clean_name.startswith("gemini"):
+                    models.append(clean_name)
+
+            next_page = payload.get("nextPageToken")
+            if next_page:
+                next_url = f"{url}&pageToken={next_page}"
+            else:
+                next_url = None
+
+        # Remove duplicates while preserving order
+        models = list(dict.fromkeys(models))
+
+        if not models:
+            return False, [], "No Gemini models with generateContent support were returned by the API."
+
+        return True, models, f"Found {len(models)} available Gemini model(s)."
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8', errors='ignore')
+        if e.code == 403:
+            return False, [], "API key authentication failed (HTTP 403). Check your key permissions."
+        return False, [], f"Failed to list models (HTTP {e.code}): {error_body}"
+    except urllib.error.URLError as e:
+        return False, [], f"Network error while listing models: {str(e)}"
+    except Exception as e:
+        return False, [], f"Failed to list models: {str(e)}"
+
+
+def choose_model_from_list(api_key: str, preferred_model: Optional[str] = None) -> Tuple[bool, Optional[str], str, List[str]]:
+    """Resolve a model dynamically from the API model list."""
+    ok, models, msg = list_generate_models(api_key)
+    if not ok:
+        return False, None, msg, []
+
+    if preferred_model and preferred_model in models:
+        return True, preferred_model, msg, models
+
+    # Prefer common fast/cost-effective models first when available.
+    for candidate in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+        if candidate in models:
+            return True, candidate, msg, models
+
+    return True, models[0], msg, models
+
+
+def download_note_type_apkg(repo: str) -> Tuple[bytes, str]:
+    """Download note type package from latest release, with direct URL fallback."""
+    api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+    release_error = None
+
+    try:
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'AnkiAddon'})
+        with urllib.request.urlopen(req, timeout=30) as response:
+            data = json.loads(response.read().decode())
+
+        for asset in data.get('assets', []):
+            if asset.get('name', '').endswith('.apkg'):
+                with urllib.request.urlopen(asset['browser_download_url'], timeout=60) as dl_resp:
+                    return dl_resp.read(), f"{asset['name']} ({data.get('tag_name', 'latest')})"
+
+        release_error = "No .apkg asset found in latest release."
+    except Exception as e:
+        release_error = str(e) or repr(e)
+
+    # Direct fallback provided by the template maintainer.
+    try:
+        with urllib.request.urlopen(DEFAULT_NOTE_TYPE_URL, timeout=60) as dl_resp:
+            return dl_resp.read(), os.path.basename(DEFAULT_NOTE_TYPE_URL)
+    except Exception as e:
+        fallback_error = str(e) or repr(e)
+        raise RuntimeError(
+            f"Could not download note type from GitHub release or fallback URL. "
+            f"Release error: {release_error}. Fallback error: {fallback_error}"
+        ) from e
+
+
+def remove_temp_file(path: str):
+    """Best-effort cleanup for temp files; tolerate Windows file locking."""
+    if not path:
+        return
+
+    for _ in range(5):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+            return
+        except PermissionError:
+            time.sleep(0.2)
+        except OSError:
+            return
 
 
 def validate_image_file(file_path: str) -> Tuple[bool, str]:
@@ -271,7 +386,13 @@ class WelcomeWizard(QDialog):
         self.api_status.setText("Testing connection...")
         QApplication.processEvents()
 
-        success, msg = test_api_connection(api_key, "gemini-1.5-flash")
+        success, selected_model, msg, _ = choose_model_from_list(api_key)
+
+        if not success or not selected_model:
+            self.api_status.setText(f"<span style='color: red;'>❌ {msg}</span>")
+            return
+
+        success, msg = test_api_connection(api_key, selected_model)
 
         if success:
             self.api_status.setText(f"<span style='color: green;'>✓ {msg}</span>")
@@ -283,45 +404,24 @@ class WelcomeWizard(QDialog):
     def download_note_type(self):
         """Download note type from GitHub"""
         try:
-            repo = DEFAULT_GITHUB_REPO
-            api_url = f"https://api.github.com/repos/{repo}/releases/latest"
-
             self.nt_status.setText("Downloading...")
             QApplication.processEvents()
 
-            # Get release info
-            req = urllib.request.Request(api_url, headers={'User-Agent': 'AnkiAddon'})
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = json.loads(response.read().decode())
-
-            # Find .apkg asset
-            assets = data.get('assets', [])
-            apkg_url = None
-            for asset in assets:
-                if asset['name'].endswith('.apkg'):
-                    apkg_url = asset['browser_download_url']
-                    break
-
-            if not apkg_url:
-                self.nt_status.setText("<span style='color: red;'>❌ No .apkg found in release</span>")
-                return
-
-            # Download file
-            with urllib.request.urlopen(apkg_url, timeout=60) as dl_resp:
-                content = dl_resp.read()
+            content, source_label = download_note_type_apkg(DEFAULT_GITHUB_REPO)
 
             # Save to temp
             fd, path = tempfile.mkstemp(suffix=".apkg")
-            with os.fdopen(fd, 'wb') as tmp:
-                tmp.write(content)
+            try:
+                with os.fdopen(fd, 'wb') as tmp:
+                    tmp.write(content)
 
-            # Import into Anki
-            importer = AnkiPackageImporter(mw.col, path)
-            importer.run()
+                # Import into Anki
+                importer = AnkiPackageImporter(mw.col, path)
+                importer.run()
+            finally:
+                remove_temp_file(path)
 
-            os.remove(path)
-
-            self.nt_status.setText(f"<span style='color: green;'>✓ Downloaded version {data['tag_name']}</span>")
+            self.nt_status.setText(f"<span style='color: green;'>✓ Downloaded {source_label}</span>")
             self.downloaded_note_type = True
             self.validate_inputs()
 
@@ -427,6 +527,10 @@ class GeminiSettings(QDialog):
         current_model = CONFIG.get("model", "gemini-1.5-flash")
         self.model_combo.setCurrentText(current_model)
         api_layout.addWidget(self.model_combo)
+
+        refresh_models_btn = QPushButton("🔄 Refresh Available Models")
+        refresh_models_btn.clicked.connect(self.refresh_models)
+        api_layout.addWidget(refresh_models_btn)
 
         api_layout.addStretch()
 
@@ -555,13 +659,49 @@ class GeminiSettings(QDialog):
         self.api_status_label.setText("Testing connection...")
         QApplication.processEvents()
 
+        list_ok, selected_model, list_msg, _ = choose_model_from_list(api_key, model)
+        if not list_ok or not selected_model:
+            self.api_status_label.setText(f"<span style='color: red;'>❌ {list_msg}</span>")
+            return
+
+        if model != selected_model:
+            self.model_combo.setCurrentText(selected_model)
+            model = selected_model
+
         success, msg = test_api_connection(api_key, model)
 
         if success:
             self.api_status_label.setText(f"<span style='color: green;'>✓ {msg}</span>")
-            tooltip("API connection successful!", period=3000)
+            tooltip(f"API connection successful! {list_msg}", period=3000)
         else:
             self.api_status_label.setText(f"<span style='color: red;'>❌ {msg}</span>")
+
+    def refresh_models(self):
+        """Refresh model list dynamically from Gemini ListModels endpoint."""
+        api_key = self.api_input.text().strip()
+        if not api_key:
+            self.api_status_label.setText("<span style='color: red;'>Enter API key first to refresh models.</span>")
+            return
+
+        self.api_status_label.setText("Refreshing model list...")
+        QApplication.processEvents()
+
+        ok, models, msg = list_generate_models(api_key)
+        if not ok:
+            self.api_status_label.setText(f"<span style='color: red;'>❌ {msg}</span>")
+            return
+
+        current = self.model_combo.currentText().strip()
+        self.model_combo.clear()
+        self.model_combo.addItems(models)
+        self.model_combo.setEditable(True)
+
+        if current in models:
+            self.model_combo.setCurrentText(current)
+        else:
+            self.model_combo.setCurrentIndex(0)
+
+        self.api_status_label.setText(f"<span style='color: green;'>✓ {msg}</span>")
 
     def populate_note_types(self):
         """Populate note type dropdown"""
@@ -598,47 +738,25 @@ class GeminiSettings(QDialog):
     def download_from_github(self):
         """Download note type from GitHub"""
         repo = CONFIG.get("github_repo", DEFAULT_GITHUB_REPO)
-        api_url = f"https://api.github.com/repos/{repo}/releases/latest"
 
         mw.progress.start(label="Downloading...", immediate=True)
 
         try:
-            # Get release info
-            req = urllib.request.Request(api_url, headers={'User-Agent': 'AnkiAddon'})
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = json.loads(response.read().decode())
-
-            # Find .apkg asset
-            assets = data.get('assets', [])
-            apkg_url = None
-            apkg_name = None
-            for asset in assets:
-                if asset['name'].endswith('.apkg'):
-                    apkg_url = asset['browser_download_url']
-                    apkg_name = asset['name']
-                    break
-
-            if not apkg_url:
-                showWarning("No .apkg file found in the latest release.\n\n"
-                            f"Please check: https://github.com/{repo}/releases")
-                return
-
-            # Download file
             mw.progress.update(label="Downloading note type...")
-            with urllib.request.urlopen(apkg_url, timeout=60) as dl_resp:
-                content = dl_resp.read()
+            content, source_label = download_note_type_apkg(repo)
 
             # Save to temp
             fd, path = tempfile.mkstemp(suffix=".apkg")
-            with os.fdopen(fd, 'wb') as tmp:
-                tmp.write(content)
+            try:
+                with os.fdopen(fd, 'wb') as tmp:
+                    tmp.write(content)
 
-            # Import into Anki
-            mw.progress.update(label="Importing into Anki...")
-            importer = AnkiPackageImporter(mw.col, path)
-            importer.run()
-
-            os.remove(path)
+                # Import into Anki
+                mw.progress.update(label="Importing into Anki...")
+                importer = AnkiPackageImporter(mw.col, path)
+                importer.run()
+            finally:
+                remove_temp_file(path)
 
             # Refresh dropdown
             self.populate_note_types()
@@ -649,7 +767,7 @@ class GeminiSettings(QDialog):
                     self.nt_combo.setCurrentIndex(i)
                     break
 
-            showInfo(f"✓ Successfully imported '{apkg_name}' from version {data['tag_name']}!")
+            showInfo(f"✓ Successfully imported '{source_label}'!")
 
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -659,7 +777,7 @@ class GeminiSettings(QDialog):
                 showWarning(f"HTTP Error {e.code}: {e.read().decode('utf-8', errors='ignore')}")
         except Exception as e:
             log_error("GitHub download", e)
-            showWarning(f"Download failed:\n\n{str(e)}\n\nCheck your internet connection.")
+            showWarning(f"Download failed:\n\n{str(e)}")
         finally:
             mw.progress.finish()
 
@@ -966,6 +1084,14 @@ def run_importer():
         open_settings()
         return
 
+    # Resolve model dynamically from available ListModels results
+    model_ok, resolved_model, model_msg, _ = choose_model_from_list(api_key, model_name)
+    if not model_ok or not resolved_model:
+        showWarning(f"Could not resolve a supported Gemini model:\n\n{model_msg}\n\nPlease check API key/project access in Settings.")
+        return
+
+    model_name = resolved_model
+
     # Validate note type
     if not nt_id:
         showWarning("Note Type not selected.\n\nPlease select a note type in Settings.")
@@ -1002,7 +1128,7 @@ def run_importer():
     root_deck = sanitize_deck_name(root_deck)
 
     # Select folder
-    folder_path = QFileDialog.getExistingFolder(
+    folder_path = QFileDialog.getExistingDirectory(
         mw,
         "Select Folder with Images",
         "",
