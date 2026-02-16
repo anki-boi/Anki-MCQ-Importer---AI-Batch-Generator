@@ -1,0 +1,19 @@
+{
+  "package": "anki_mcq_importer_ai_batch_generator",
+  "name": "Anki MCQ Importer - AI Batch Generator",
+  "version": "3.1.0",
+  "mod": 1735689600,
+  "min_point_version": 45,
+  "max_point_version": 99,
+  "branch_index": 0,
+  "config": {
+    "api_key": "",
+    "model": "gemini-1.5-flash",
+    "note_type_id": null,
+    "github_repo": "anki-boi/True-Anki-MCQ-Note-Template",
+    "show_welcome": true,
+    "auto_open_media": true,
+    "batch_size": 10,
+    "validate_api_on_startup": false
+  }
+}
