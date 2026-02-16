@@ -1125,39 +1125,33 @@ def run_importer():
 
     root_deck = sanitize_deck_name(root_deck)
 
-    # Select folder
-    folder_path = QFileDialog.getExistingDirectory(
+    # Select individual image files instead of folder
+    file_paths, _ = QFileDialog.getOpenFileNames(
         mw,
-        "Select Folder with Images",
+        "Select Images to Import",
         "",
-        QFileDialog.Option.ShowDirsOnly
+        "Images (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;All Files (*)"
     )
 
-    if not folder_path:
+    if not file_paths:
         return
 
     # 3. Validate and Sort Files
-    try:
-        all_files = [f for f in os.listdir(folder_path)
-                     if os.path.isfile(os.path.join(folder_path, f))]
-    except Exception as e:
-        showWarning(f"Cannot read folder:\n\n{str(e)}")
-        return
-
     # Filter valid images
     valid_files = []
     invalid_files = []
 
-    for filename in all_files:
-        file_path = os.path.join(folder_path, filename)
+    for file_path in file_paths:
+        filename = os.path.basename(file_path)
         ext = os.path.splitext(filename)[1].lower()
 
         if ext not in SUPPORTED_IMAGE_FORMATS:
+            invalid_files.append((filename, f"Unsupported format: {ext}"))
             continue
 
         is_valid, msg = validate_image_file(file_path)
         if is_valid:
-            valid_files.append(filename)
+            valid_files.append(file_path)
         else:
             invalid_files.append((filename, msg))
 
@@ -1168,7 +1162,7 @@ def run_importer():
                 invalid_list += f"\n... and {len(invalid_files) - 5} more"
             showWarning(f"No valid images found.\n\nIssues:\n{invalid_list}")
         else:
-            showWarning(f"No image files found in folder.\n\n"
+            showWarning(f"No image files selected.\n\n"
                         f"Supported formats: {', '.join(SUPPORTED_IMAGE_FORMATS)}")
         return
 
@@ -1176,11 +1170,10 @@ def run_importer():
     def natural_sort_key(text):
         return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', text)]
 
-    valid_files.sort(key=natural_sort_key)
+    valid_files.sort(key=lambda p: natural_sort_key(os.path.basename(p)))
 
     # Show confirmation
     confirm_msg = f"Ready to import:\n\n"
-    confirm_msg += f"• Folder: {os.path.basename(folder_path)}\n"
     confirm_msg += f"• Images: {len(valid_files)} files\n"
     confirm_msg += f"• Root Deck: {root_deck}\n"
     confirm_msg += f"• Note Type: {model['name']}\n"
@@ -1225,11 +1218,11 @@ def run_importer():
     error_log = []
 
     try:
-        for index, filename in enumerate(valid_files):
+        for index, file_path in enumerate(valid_files):
             if progress_dlg.is_cancelled():
                 break
 
-            file_path = os.path.join(folder_path, filename)
+            filename = os.path.basename(file_path)
             progress_dlg.update_progress(
                 index + 1,
                 len(valid_files),
@@ -1399,11 +1392,12 @@ def check_first_run():
 def init_addon():
     """Initialize addon on Anki startup"""
 
-    # Create menu
-    menu = mw.form.menuTools.addMenu(f"⚡ {ADDON_NAME}")
+    # Create menu in main menu bar (like Float Window)
+    menu = QMenu(f"⚡ MCQ Importer", mw)
+    mw.form.menubar.insertMenu(mw.form.menuTools.menuAction(), menu)
 
     # Main import action
-    action_import = QAction("📥 Import Folder...", mw)
+    action_import = QAction("📥 Import Images...", mw)
     action_import.triggered.connect(run_importer)
     action_import.setShortcut("Ctrl+Shift+G")
     menu.addAction(action_import)
