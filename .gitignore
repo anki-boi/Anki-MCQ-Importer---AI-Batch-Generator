@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.pyo
+*.ankiaddon
+RELEASE_NOTES_v*.md
