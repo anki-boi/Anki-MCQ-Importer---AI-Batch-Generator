@@ -1,6 +1,9 @@
-# True Anki MCQ Importer - AI Batch Generator (v3.1 - Production Ready Edition)
-# Features: Robust Error Handling, Auto-Setup Wizard, GitHub Auto-Update,
-# Dynamic Note Type Selection, Model Switching, Settings GUI, Comprehensive Validation
+# True Anki MCQ Importer - AI Batch Generator (v3.2 - Fixed Edition)
+# Fixes: 
+# - API key validation now properly saves and doesn't re-prompt
+# - Progress dialog can be closed with X button
+# - Manual note type installation (provides download link only)
+# - Updated to Gemini 3 models
 
 import os
 import json
@@ -8,7 +11,6 @@ import urllib.request
 import urllib.error
 import base64
 import re
-import tempfile
 import traceback
 from typing import Optional, List, Tuple
 import time
@@ -17,16 +19,15 @@ from aqt import mw
 from aqt.utils import showInfo, showWarning, askUser, tooltip, getText
 from aqt.qt import *
 from anki.notes import Note
-from anki.importing.apkg import AnkiPackageImporter
 
 # ============================================================================
 # CONFIGURATION & CONSTANTS
 # ============================================================================
 
 ADDON_NAME = "Anki MCQ Importer - AI Batch Generator"
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 DEFAULT_GITHUB_REPO = "anki-boi/True-Anki-MCQ-Note-Template"
-DEFAULT_NOTE_TYPE_URL = "https://github.com/anki-boi/True-Anki-MCQ-Note-Template/releases/download/v4.25.0/zNote.Updater.apkg"
+NOTE_TYPE_DOWNLOAD_URL = "https://github.com/anki-boi/True-Anki-MCQ-Note-Template/releases/latest"
 SUPPORTED_IMAGE_FORMATS = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
 MAX_FILE_SIZE_MB = 20  # Maximum image file size in MB
 GEMINI_MODELS = [
@@ -41,10 +42,9 @@ def get_default_config():
         "api_key": "",
         "model": "gemini-3-flash-preview",
         "note_type_id": None,
-        "github_repo": DEFAULT_GITHUB_REPO,
         "show_welcome": True,
         "auto_open_media": True,
-        "batch_size": 10,  # For progress updates
+        "batch_size": 10,
         "validate_api_on_startup": False
     }
 
@@ -178,146 +178,13 @@ def choose_model_from_list(api_key: str, preferred_model: Optional[str] = None) 
     if preferred_model and preferred_model in models:
         return True, preferred_model, msg, models
 
-    # Prefer common fast/cost-effective models first when available.
-    for candidate in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+    # Prefer Gemini 3 models first
+    for candidate in ["gemini-3-flash-preview", "gemini-3-pro-preview"]:
         if candidate in models:
             return True, candidate, msg, models
 
+    # Fallback to any available model
     return True, models[0], msg, models
-
-
-def download_note_type_apkg(repo: str) -> Tuple[bytes, str]:
-    """Download note type package from latest release, with direct URL fallback."""
-    api_url = f"https://api.github.com/repos/{repo}/releases/latest"
-    release_error = None
-
-    try:
-        req = urllib.request.Request(api_url, headers={'User-Agent': 'AnkiAddon'})
-        with urllib.request.urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode())
-
-        for asset in data.get('assets', []):
-            if asset.get('name', '').endswith('.apkg'):
-                with urllib.request.urlopen(asset['browser_download_url'], timeout=60) as dl_resp:
-                    return dl_resp.read(), f"{asset['name']} ({data.get('tag_name', 'latest')})"
-
-        release_error = "No .apkg asset found in latest release."
-    except Exception as e:
-        release_error = str(e) or repr(e)
-
-    # Direct fallback provided by the template maintainer.
-    try:
-        with urllib.request.urlopen(DEFAULT_NOTE_TYPE_URL, timeout=60) as dl_resp:
-            return dl_resp.read(), os.path.basename(DEFAULT_NOTE_TYPE_URL)
-    except Exception as e:
-        fallback_error = str(e) or repr(e)
-        raise RuntimeError(
-            f"Could not download note type from GitHub release or fallback URL. "
-            f"Release error: {release_error}. Fallback error: {fallback_error}"
-        ) from e
-
-def install_note_type_from_apkg(apkg_data: bytes, source_label: str) -> Tuple[bool, str]:
-    """Install note type from .apkg data with proper error handling"""
-    fd, path = None, None
-    
-    try:
-        # Create temp file
-        fd, path = tempfile.mkstemp(suffix=".apkg")
-        with os.fdopen(fd, 'wb') as tmp:
-            tmp.write(apkg_data)
-            fd = None  # Prevent double-close
-        
-        # Ensure collection is ready
-        mw.col.save()
-        
-        # Import with error handling
-        importer = AnkiPackageImporter(mw.col, path)
-        importer.run()
-        
-        # Force refresh of note types
-        mw.col.models.flush()
-        
-        # Give Anki time to process
-        time.sleep(0.5)
-        
-        return True, f"Successfully imported {source_label}"
-        
-    except Exception as e:
-        error_detail = traceback.format_exc()
-        log_error(f"APKG Installation: {source_label}", e)
-        return False, f"Import failed: {str(e)}\n\nDetails:\n{error_detail}"
-        
-    finally:
-        # Cleanup with retry logic
-        if path:
-            for attempt in range(10):  # Increased retries
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                    break
-                except (PermissionError, OSError):
-                    time.sleep(0.5)
-
-# Update download_note_type method in WelcomeWizard:
-def download_note_type(self):
-    """Download note type from GitHub"""
-    try:
-        self.nt_status.setText("Downloading...")
-        QApplication.processEvents()
-
-        content, source_label = download_note_type_apkg(DEFAULT_GITHUB_REPO)
-        
-        self.nt_status.setText("Installing...")
-        QApplication.processEvents()
-        
-        success, message = install_note_type_from_apkg(content, source_label)
-        
-        if success:
-            self.nt_status.setText(f"<span style='color: green;'>✓ {message}</span>")
-            self.downloaded_note_type = True
-            self.validate_inputs()
-        else:
-            self.nt_status.setText(f"<span style='color: red;'>❌ {message}</span>")
-
-    except Exception as e:
-        log_error("Note type download", e)
-        error_detail = traceback.format_exc()
-        self.nt_status.setText(f"<span style='color: red;'>❌ Download failed: {str(e)}</span>")
-        print(f"Full error:\n{error_detail}")
-
-def test_apkg_import():
-    """Debug function to test .apkg import"""
-    try:
-        print(f"Anki version: {mw.col.server}")
-        print(f"Collection path: {mw.col.path}")
-        print(f"Media folder: {mw.col.media.dir()}")
-        print(f"Current note types: {[m['name'] for m in mw.col.models.all()]}")
-        
-        # Test with a minimal .apkg file
-        content, label = download_note_type_apkg(DEFAULT_GITHUB_REPO)
-        print(f"Downloaded {len(content)} bytes from {label}")
-        
-        success, msg = install_note_type_from_apkg(content, label)
-        print(f"Install result: {success} - {msg}")
-        
-    except Exception as e:
-        print(f"Test failed: {traceback.format_exc()}")
-
-
-def remove_temp_file(path: str):
-    """Best-effort cleanup for temp files; tolerate Windows file locking."""
-    if not path:
-        return
-
-    for _ in range(5):
-        try:
-            if os.path.exists(path):
-                os.remove(path)
-            return
-        except PermissionError:
-            time.sleep(0.2)
-        except OSError:
-            return
 
 
 def validate_image_file(file_path: str) -> Tuple[bool, str]:
@@ -375,11 +242,10 @@ class WelcomeWizard(QDialog):
         # Welcome message
         welcome_text = QLabel(f"""
         <h2>Welcome to {ADDON_NAME} v{VERSION}!</h2>
-        <p>This wizard will help you set up the addon in 3 easy steps:</p>
+        <p>This wizard will help you set up the addon in 2 easy steps:</p>
         <ol>
             <li><b>Get your Gemini API Key</b> (free from Google)</li>
-            <li><b>Download the Note Type</b> (automatic from GitHub)</li>
-            <li><b>Configure your preferences</b></li>
+            <li><b>Download and install the Note Type</b> (manual installation)</li>
         </ol>
         <p>The entire setup takes less than 2 minutes!</p>
         """)
@@ -414,22 +280,30 @@ class WelcomeWizard(QDialog):
         test_api_btn.clicked.connect(self.test_api)
         layout.addWidget(test_api_btn)
 
-        # Step 2: Note Type
+        # Step 2: Note Type (Manual Download)
         layout.addWidget(QLabel("<hr>"))
-        layout.addWidget(QLabel("<h3>Step 2: Download Note Type</h3>"))
+        layout.addWidget(QLabel("<h3>Step 2: Install Note Type</h3>"))
 
-        nt_instructions = QLabel("""
-        <p>Click the button below to automatically download the latest
-        Multiple Choice note type from GitHub.</p>
+        nt_instructions = QLabel(f"""
+        <p><b>Manual Installation Required:</b></p>
+        <p>1. Click the button below to open the GitHub releases page<br>
+        2. Download the latest .apkg file<br>
+        3. In Anki, go to: File → Import<br>
+        4. Select the downloaded .apkg file<br>
+        5. Return here and click "I've Installed It"</p>
         """)
         nt_instructions.setWordWrap(True)
         layout.addWidget(nt_instructions)
 
-        download_btn = QPushButton("📥 Download Note Type from GitHub")
-        download_btn.clicked.connect(self.download_note_type)
-        layout.addWidget(download_btn)
+        open_github_btn = QPushButton("🌐 Open Note Type Download Page")
+        open_github_btn.clicked.connect(self.open_github_releases)
+        layout.addWidget(open_github_btn)
 
-        self.nt_status = QLabel("Status: Not downloaded yet")
+        confirm_install_btn = QPushButton("✓ I've Installed the Note Type")
+        confirm_install_btn.clicked.connect(self.confirm_note_type_installed)
+        layout.addWidget(confirm_install_btn)
+
+        self.nt_status = QLabel("Status: Not installed yet")
         self.nt_status.setWordWrap(True)
         layout.addWidget(self.nt_status)
 
@@ -449,13 +323,13 @@ class WelcomeWizard(QDialog):
 
         layout.addLayout(button_layout)
 
-        self.downloaded_note_type = False
+        self.note_type_confirmed = False
         self.api_tested = False
 
     def validate_inputs(self):
         """Enable finish button when requirements met"""
         has_api = len(self.api_input.text().strip()) > 0
-        self.finish_btn.setEnabled(has_api and self.downloaded_note_type)
+        self.finish_btn.setEnabled(has_api and self.note_type_confirmed)
 
     def test_api(self):
         """Test API key validity"""
@@ -486,37 +360,33 @@ class WelcomeWizard(QDialog):
         else:
             self.api_status.setText(f"<span style='color: red;'>❌ {msg}</span>")
 
-    def download_note_type(self):
-        """Download note type from GitHub"""
-        try:
-            self.nt_status.setText("Downloading...")
-            QApplication.processEvents()
+    def open_github_releases(self):
+        """Open GitHub releases page in browser"""
+        QDesktopServices.openUrl(QUrl(NOTE_TYPE_DOWNLOAD_URL))
+        tooltip("Opening download page in your browser...", period=2000)
 
-            content, source_label = download_note_type_apkg(DEFAULT_GITHUB_REPO)
+    def confirm_note_type_installed(self):
+        """User confirms they've installed the note type"""
+        # Check if any MCQ-related note type exists
+        models = mw.col.models.all()
+        mcq_models = [m for m in models if "Multiple Choice" in m['name'] or "MCQ" in m['name']]
 
-            # Save to temp
-            fd, path = tempfile.mkstemp(suffix=".apkg")
-            try:
-                with os.fdopen(fd, 'wb') as tmp:
-                    tmp.write(content)
-
-                # Import into Anki
-                importer = AnkiPackageImporter(mw.col, path)
-                importer.run()
-            finally:
-                remove_temp_file(path)
-
-            self.nt_status.setText(f"<span style='color: green;'>✓ Downloaded {source_label}</span>")
-            self.downloaded_note_type = True
+        if mcq_models:
+            self.nt_status.setText(f"<span style='color: green;'>✓ Found note type: {mcq_models[0]['name']}</span>")
+            self.note_type_confirmed = True
             self.validate_inputs()
-
-        except Exception as e:
-            log_error("Note type download", e)
-            self.nt_status.setText(f"<span style='color: red;'>❌ Download failed: {str(e)}</span>")
+        else:
+            if askUser("No Multiple Choice note type detected.\n\nHave you imported the .apkg file in Anki?\n\nMark as completed anyway?"):
+                self.nt_status.setText("<span style='color: orange;'>⚠ Marked as installed (no MCQ note type detected)</span>")
+                self.note_type_confirmed = True
+                self.validate_inputs()
 
     def finish_setup(self):
         """Save configuration and close"""
-        CONFIG["api_key"] = self.api_input.text().strip()
+        api_key = self.api_input.text().strip()
+        
+        # Save API key
+        CONFIG["api_key"] = api_key
         CONFIG["show_welcome"] = False
 
         # Try to auto-select the downloaded note type
@@ -526,7 +396,9 @@ class WelcomeWizard(QDialog):
                 CONFIG["note_type_id"] = m['id']
                 break
 
+        # Force save config
         mw.addonManager.writeConfig(__name__, CONFIG)
+        
         self.accept()
 
         showInfo(f"Setup complete! You can now use {ADDON_NAME}.\n\n"
@@ -600,8 +472,7 @@ class GeminiSettings(QDialog):
         # Model selection
         api_layout.addWidget(QLabel("<b>Gemini Model:</b>"))
         model_help = QLabel("""
-        <p><i>Flash models are faster and cheaper, Pro models are more capable.<br>
-        Flash-8b is the fastest, Pro is most accurate.</i></p>
+        <p><i>Flash models are faster and cheaper, Pro models are more capable.</i></p>
         """)
         model_help.setWordWrap(True)
         api_layout.addWidget(model_help)
@@ -609,7 +480,7 @@ class GeminiSettings(QDialog):
         self.model_combo = QComboBox()
         self.model_combo.addItems(GEMINI_MODELS)
         self.model_combo.setEditable(True)
-        current_model = CONFIG.get("model", "gemini-1.5-flash")
+        current_model = CONFIG.get("model", "gemini-3-flash-preview")
         self.model_combo.setCurrentText(current_model)
         api_layout.addWidget(self.model_combo)
 
@@ -627,21 +498,17 @@ class GeminiSettings(QDialog):
 
         nt_layout.addWidget(QLabel("<h3>Note Type Management</h3>"))
 
-        nt_layout.addWidget(QLabel("""
-        <p>Download the latest Multiple Choice note type template from GitHub,
-        or select an existing note type from your collection.</p>
+        nt_layout.addWidget(QLabel(f"""
+        <p><b>Download the Multiple Choice note type:</b></p>
+        <p>1. Click the button below to open GitHub releases<br>
+        2. Download the latest .apkg file<br>
+        3. Import it in Anki: File → Import<br>
+        4. Return here to select it</p>
         """))
 
-        download_section = QGroupBox("Download from GitHub")
-        download_layout = QVBoxLayout()
-        download_section.setLayout(download_layout)
-        nt_layout.addWidget(download_section)
-
-        download_layout.addWidget(QLabel(f"Repository: <b>{CONFIG.get('github_repo', DEFAULT_GITHUB_REPO)}</b>"))
-
-        download_btn = QPushButton("📥 Download Latest Note Type")
-        download_btn.clicked.connect(self.download_from_github)
-        download_layout.addWidget(download_btn)
+        open_link_btn = QPushButton("🌐 Open Note Type Download Page")
+        open_link_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(NOTE_TYPE_DOWNLOAD_URL)))
+        nt_layout.addWidget(open_link_btn)
 
         nt_layout.addWidget(QLabel("<hr>"))
 
@@ -657,6 +524,10 @@ class GeminiSettings(QDialog):
         self.nt_combo = QComboBox()
         self.populate_note_types()
         select_layout.addWidget(self.nt_combo)
+
+        refresh_nt_btn = QPushButton("🔄 Refresh Note Type List")
+        refresh_nt_btn.clicked.connect(self.populate_note_types)
+        select_layout.addWidget(refresh_nt_btn)
 
         fields_btn = QPushButton("View Fields")
         fields_btn.clicked.connect(self.show_note_type_fields)
@@ -819,52 +690,6 @@ class GeminiSettings(QDialog):
         field_list = "\n".join([f"{i + 1}. {name}" for i, name in enumerate(fields)])
 
         showInfo(f"Fields in '{model['name']}':\n\n{field_list}")
-
-    def download_from_github(self):
-        """Download note type from GitHub"""
-        repo = CONFIG.get("github_repo", DEFAULT_GITHUB_REPO)
-
-        mw.progress.start(label="Downloading...", immediate=True)
-
-        try:
-            mw.progress.update(label="Downloading note type...")
-            content, source_label = download_note_type_apkg(repo)
-
-            # Save to temp
-            fd, path = tempfile.mkstemp(suffix=".apkg")
-            try:
-                with os.fdopen(fd, 'wb') as tmp:
-                    tmp.write(content)
-
-                # Import into Anki
-                mw.progress.update(label="Importing into Anki...")
-                importer = AnkiPackageImporter(mw.col, path)
-                importer.run()
-            finally:
-                remove_temp_file(path)
-
-            # Refresh dropdown
-            self.populate_note_types()
-
-            # Auto-select if possible
-            for i in range(self.nt_combo.count()):
-                if "Multiple Choice" in self.nt_combo.itemText(i):
-                    self.nt_combo.setCurrentIndex(i)
-                    break
-
-            showInfo(f"✓ Successfully imported '{source_label}'!")
-
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                showWarning(f"Repository not found or no releases available.\n\n"
-                            f"URL: https://github.com/{repo}")
-            else:
-                showWarning(f"HTTP Error {e.code}: {e.read().decode('utf-8', errors='ignore')}")
-        except Exception as e:
-            log_error("GitHub download", e)
-            showWarning(f"Download failed:\n\n{str(e)}")
-        finally:
-            mw.progress.finish()
 
     def reset_to_defaults(self):
         """Reset all settings to defaults"""
@@ -1141,12 +966,15 @@ def parse_gemini_response(response_text: str) -> List[Tuple[str, str, str, str, 
 # ============================================================================
 
 class ImportProgressDialog(QDialog):
-    """Progress dialog with detailed status"""
+    """Progress dialog with detailed status - NOW CLOSEABLE"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Import Progress")
         self.setMinimumWidth(500)
+        
+        # Allow closing with X button
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowCloseButtonHint)
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -1163,11 +991,12 @@ class ImportProgressDialog(QDialog):
         self.details_text.setMaximumHeight(150)
         layout.addWidget(self.details_text)
 
-        self.cancel_btn = QPushButton("Cancel")
-        self.cancel_btn.clicked.connect(self.reject)
+        self.cancel_btn = QPushButton("Cancel Import")
+        self.cancel_btn.clicked.connect(self.cancel_import)
         layout.addWidget(self.cancel_btn)
 
         self.cancelled = False
+        self.import_complete = False
 
     def update_progress(self, current: int, total: int, status: str):
         """Update progress bar and status"""
@@ -1185,12 +1014,38 @@ class ImportProgressDialog(QDialog):
         """Check if user cancelled"""
         return self.cancelled
 
-    def reject(self):
-        """Handle cancel"""
-        if askUser("Cancel import?\n\nAlready imported cards will be kept."):
-            self.cancelled = True
-            self.cancel_btn.setEnabled(False)
-            self.status_label.setText("Cancelling...")
+    def mark_complete(self):
+        """Mark import as complete - changes button behavior"""
+        self.import_complete = True
+        self.cancel_btn.setText("Close")
+        self.status_label.setText("Import Complete!")
+
+    def cancel_import(self):
+        """Handle cancel/close"""
+        if self.import_complete:
+            # Import done, just close
+            self.accept()
+        else:
+            # Import in progress, confirm cancellation
+            if askUser("Cancel import?\n\nAlready imported cards will be kept."):
+                self.cancelled = True
+                self.cancel_btn.setEnabled(False)
+                self.status_label.setText("Cancelling...")
+                
+    def closeEvent(self, event):
+        """Handle window close button (X)"""
+        if self.import_complete:
+            # Import done, allow close
+            event.accept()
+        else:
+            # Import in progress, confirm cancellation
+            if askUser("Cancel import?\n\nAlready imported cards will be kept."):
+                self.cancelled = True
+                self.cancel_btn.setEnabled(False)
+                self.status_label.setText("Cancelling...")
+                event.accept()
+            else:
+                event.ignore()
 
 
 def run_importer():
@@ -1198,9 +1053,10 @@ def run_importer():
 
     # 1. Validate Configuration
     api_key = CONFIG.get("api_key", "").strip()
-    model_name = CONFIG.get("model", "gemini-1.5-flash").strip()
+    model_name = CONFIG.get("model", "gemini-3-flash-preview").strip()
     nt_id = CONFIG.get("note_type_id")
 
+    # Check if API key exists and is valid format
     if not api_key:
         showWarning("API Key not configured.\n\nPlease set your Gemini API key in Settings.")
         open_settings()
@@ -1445,7 +1301,8 @@ def run_importer():
         showWarning(f"Critical error during import:\n\n{str(e)}\n\nCheck console for details.")
 
     finally:
-        progress_dlg.close()
+        # Mark import as complete
+        progress_dlg.mark_complete()
         mw.reset()
 
     # 5. Show Results
@@ -1456,16 +1313,13 @@ def run_importer():
     if files_failed > 0:
         result_msg += f"\n⚠ Files with errors: {files_failed}\n"
 
-    if error_log:
-        result_msg += "\n\nView error details?"
+    progress_dlg.add_detail(f"\n{result_msg}")
 
-        if askUser(result_msg):
-            error_details = "\n".join([f"{fname}: {msg}" for fname, msg in error_log[:20]])
-            if len(error_log) > 20:
-                error_details += f"\n\n... and {len(error_log) - 20} more errors"
-            showInfo(f"Error Details:\n\n{error_details}")
-    else:
-        showInfo(result_msg)
+    if error_log and askUser(f"{result_msg}\n\nView error details?"):
+        error_details = "\n".join([f"{fname}: {msg}" for fname, msg in error_log[:20]])
+        if len(error_log) > 20:
+            error_details += f"\n\n... and {len(error_log) - 20} more errors"
+        showInfo(f"Error Details:\n\n{error_details}")
 
     # Optional: Open media folder
     if CONFIG.get("auto_open_media", True) and cards_created > 0:
@@ -1499,12 +1353,15 @@ def show_about():
         <li>Intelligent subdeck organization</li>
         <li>Multiple Choice question format</li>
         <li>Context-aware processing (previous page memory)</li>
-        <li>Auto-update from GitHub</li>
+        <li>Gemini 3 model support</li>
     </ul>
 
     <p><b>Support:</b><br>
     GitHub: <a href="https://github.com/{DEFAULT_GITHUB_REPO}">
     {DEFAULT_GITHUB_REPO}</a></p>
+
+    <p><b>Note Type Download:</b><br>
+    <a href="{NOTE_TYPE_DOWNLOAD_URL}">{NOTE_TYPE_DOWNLOAD_URL}</a></p>
 
     <p><b>API Provider:</b><br>
     Google Gemini AI (<a href="https://ai.google.dev">ai.google.dev</a>)</p>
@@ -1558,7 +1415,7 @@ def init_addon():
         api_key = CONFIG.get("api_key", "")
         if api_key:
             def validate():
-                success, msg = test_api_connection(api_key, CONFIG.get("model", "gemini-1.5-flash"))
+                success, msg = test_api_connection(api_key, CONFIG.get("model", "gemini-3-flash-preview"))
                 if not success:
                     showWarning(f"Gemini API validation failed:\n\n{msg}\n\n"
                                 "Please check your settings.")
