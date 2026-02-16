@@ -11,6 +11,7 @@ import re
 import tempfile
 import traceback
 from typing import Optional, List, Tuple
+import time
 
 from aqt import mw
 from aqt.utils import showInfo, showWarning, askUser, tooltip, getText
@@ -190,6 +191,7 @@ def choose_model_from_list(api_key: str, preferred_model: Optional[str] = None) 
 def download_note_type_apkg(repo: str) -> Tuple[bytes, str]:
     """Download note type package from latest release, with direct URL fallback."""
     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+    release_error = None
 
     try:
         req = urllib.request.Request(api_url, headers={'User-Agent': 'AnkiAddon'})
@@ -200,12 +202,37 @@ def download_note_type_apkg(repo: str) -> Tuple[bytes, str]:
             if asset.get('name', '').endswith('.apkg'):
                 with urllib.request.urlopen(asset['browser_download_url'], timeout=60) as dl_resp:
                     return dl_resp.read(), f"{asset['name']} ({data.get('tag_name', 'latest')})"
-    except Exception:
-        pass
+
+        release_error = "No .apkg asset found in latest release."
+    except Exception as e:
+        release_error = str(e) or repr(e)
 
     # Direct fallback provided by the template maintainer.
-    with urllib.request.urlopen(DEFAULT_NOTE_TYPE_URL, timeout=60) as dl_resp:
-        return dl_resp.read(), os.path.basename(DEFAULT_NOTE_TYPE_URL)
+    try:
+        with urllib.request.urlopen(DEFAULT_NOTE_TYPE_URL, timeout=60) as dl_resp:
+            return dl_resp.read(), os.path.basename(DEFAULT_NOTE_TYPE_URL)
+    except Exception as e:
+        fallback_error = str(e) or repr(e)
+        raise RuntimeError(
+            f"Could not download note type from GitHub release or fallback URL. "
+            f"Release error: {release_error}. Fallback error: {fallback_error}"
+        ) from e
+
+
+def remove_temp_file(path: str):
+    """Best-effort cleanup for temp files; tolerate Windows file locking."""
+    if not path:
+        return
+
+    for _ in range(5):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+            return
+        except PermissionError:
+            time.sleep(0.2)
+        except OSError:
+            return
 
 
 def validate_image_file(file_path: str) -> Tuple[bool, str]:
@@ -384,14 +411,15 @@ class WelcomeWizard(QDialog):
 
             # Save to temp
             fd, path = tempfile.mkstemp(suffix=".apkg")
-            with os.fdopen(fd, 'wb') as tmp:
-                tmp.write(content)
+            try:
+                with os.fdopen(fd, 'wb') as tmp:
+                    tmp.write(content)
 
-            # Import into Anki
-            importer = AnkiPackageImporter(mw.col, path)
-            importer.run()
-
-            os.remove(path)
+                # Import into Anki
+                importer = AnkiPackageImporter(mw.col, path)
+                importer.run()
+            finally:
+                remove_temp_file(path)
 
             self.nt_status.setText(f"<span style='color: green;'>✓ Downloaded {source_label}</span>")
             self.downloaded_note_type = True
@@ -719,15 +747,16 @@ class GeminiSettings(QDialog):
 
             # Save to temp
             fd, path = tempfile.mkstemp(suffix=".apkg")
-            with os.fdopen(fd, 'wb') as tmp:
-                tmp.write(content)
+            try:
+                with os.fdopen(fd, 'wb') as tmp:
+                    tmp.write(content)
 
-            # Import into Anki
-            mw.progress.update(label="Importing into Anki...")
-            importer = AnkiPackageImporter(mw.col, path)
-            importer.run()
-
-            os.remove(path)
+                # Import into Anki
+                mw.progress.update(label="Importing into Anki...")
+                importer = AnkiPackageImporter(mw.col, path)
+                importer.run()
+            finally:
+                remove_temp_file(path)
 
             # Refresh dropdown
             self.populate_note_types()
@@ -748,7 +777,7 @@ class GeminiSettings(QDialog):
                 showWarning(f"HTTP Error {e.code}: {e.read().decode('utf-8', errors='ignore')}")
         except Exception as e:
             log_error("GitHub download", e)
-            showWarning(f"Download failed:\n\n{str(e)}\n\nCheck your internet connection.")
+            showWarning(f"Download failed:\n\n{str(e)}")
         finally:
             mw.progress.finish()
 
@@ -1099,7 +1128,7 @@ def run_importer():
     root_deck = sanitize_deck_name(root_deck)
 
     # Select folder
-    folder_path = QFileDialog.getExistingFolder(
+    folder_path = QFileDialog.getExistingDirectory(
         mw,
         "Select Folder with Images",
         "",
