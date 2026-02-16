@@ -216,6 +216,93 @@ def download_note_type_apkg(repo: str) -> Tuple[bytes, str]:
             f"Release error: {release_error}. Fallback error: {fallback_error}"
         ) from e
 
+def install_note_type_from_apkg(apkg_data: bytes, source_label: str) -> Tuple[bool, str]:
+    """Install note type from .apkg data with proper error handling"""
+    fd, path = None, None
+    
+    try:
+        # Create temp file
+        fd, path = tempfile.mkstemp(suffix=".apkg")
+        with os.fdopen(fd, 'wb') as tmp:
+            tmp.write(apkg_data)
+            fd = None  # Prevent double-close
+        
+        # Ensure collection is ready
+        mw.col.save()
+        
+        # Import with error handling
+        importer = AnkiPackageImporter(mw.col, path)
+        importer.run()
+        
+        # Force refresh of note types
+        mw.col.models.flush()
+        
+        # Give Anki time to process
+        time.sleep(0.5)
+        
+        return True, f"Successfully imported {source_label}"
+        
+    except Exception as e:
+        error_detail = traceback.format_exc()
+        log_error(f"APKG Installation: {source_label}", e)
+        return False, f"Import failed: {str(e)}\n\nDetails:\n{error_detail}"
+        
+    finally:
+        # Cleanup with retry logic
+        if path:
+            for attempt in range(10):  # Increased retries
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                    break
+                except (PermissionError, OSError):
+                    time.sleep(0.5)
+
+# Update download_note_type method in WelcomeWizard:
+def download_note_type(self):
+    """Download note type from GitHub"""
+    try:
+        self.nt_status.setText("Downloading...")
+        QApplication.processEvents()
+
+        content, source_label = download_note_type_apkg(DEFAULT_GITHUB_REPO)
+        
+        self.nt_status.setText("Installing...")
+        QApplication.processEvents()
+        
+        success, message = install_note_type_from_apkg(content, source_label)
+        
+        if success:
+            self.nt_status.setText(f"<span style='color: green;'>✓ {message}</span>")
+            self.downloaded_note_type = True
+            self.validate_inputs()
+        else:
+            self.nt_status.setText(f"<span style='color: red;'>❌ {message}</span>")
+
+    except Exception as e:
+        log_error("Note type download", e)
+        error_detail = traceback.format_exc()
+        self.nt_status.setText(f"<span style='color: red;'>❌ Download failed: {str(e)}</span>")
+        print(f"Full error:\n{error_detail}")
+
+def test_apkg_import():
+    """Debug function to test .apkg import"""
+    try:
+        print(f"Anki version: {mw.col.server}")
+        print(f"Collection path: {mw.col.path}")
+        print(f"Media folder: {mw.col.media.dir()}")
+        print(f"Current note types: {[m['name'] for m in mw.col.models.all()]}")
+        
+        # Test with a minimal .apkg file
+        content, label = download_note_type_apkg(DEFAULT_GITHUB_REPO)
+        print(f"Downloaded {len(content)} bytes from {label}")
+        
+        success, msg = install_note_type_from_apkg(content, label)
+        print(f"Install result: {success} - {msg}")
+        
+    except Exception as e:
+        print(f"Test failed: {traceback.format_exc()}")
+
 
 def remove_temp_file(path: str):
     """Best-effort cleanup for temp files; tolerate Windows file locking."""
