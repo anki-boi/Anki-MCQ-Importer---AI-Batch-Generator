@@ -1456,12 +1456,15 @@ def run_importer():
         if mapped and mapped in anki_fields: return mapped
         return anki_fields[fb] if fb < len(anki_fields) else None
 
+    # Initialise all field variables to None so they're always defined
+    fq = fc = fa = ft = fe = None
+
     if fmt == "mcq":
         fq = resolve(SLOT_QUESTION, 0); fc = resolve(SLOT_CHOICES, 1)
         fa = resolve(SLOT_ANSWER, 2);   fe = resolve(SLOT_EXTRA, 3)
     elif fmt == "cloze":
         ft = resolve(SLOT_TEXT, 0);     fe = resolve(SLOT_EXTRA, 1)
-    else:
+    else:  # basic
         fq = resolve(SLOT_QUESTION, 0); fa = resolve(SLOT_ANSWER, 1); fe = resolve(SLOT_EXTRA, 2)
 
     prog = ImportProgressDialog(mw)
