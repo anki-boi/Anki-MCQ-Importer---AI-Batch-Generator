@@ -1,39 +1,31 @@
-# Anki MCQ Importer - AI Batch Generator (v4.0.0)
+# Anki MCQ Importer - AI Batch Generator (v4.1.0)
 
 An Anki add-on that batch-processes folders of study images with Google Gemini and creates high-yield cards into organized subdecks.
 
-Version 4 introduces a **Prompt Profiles** system so you can generate different card formats from the same import pipeline:
+Version 4.1 keeps prompts in runtime config (so edits survive add-on updates) and supports three built-in card formats:
 
 - **MCQ** cards (Question / Multiple Choice / Correct Answers / Extra)
-- **Cloze** cards (Text / Extra)
+- **Cloze Deletion** cards (Text / Extra)
 - **Basic** cards (Front / Back / Extra)
 
 ---
 
-## What’s new in v4.0
+## What’s new in v4.1
 
-### Prompt Profiles (major)
-- Added profile-based generation with three built-in profiles: **MCQ**, **Cloze**, and **Basic**.
-- Each profile has its own tuned prompt and parser format.
-- You can edit prompt text directly in Settings.
-- You can duplicate and customize profiles for your own workflows.
-- Custom profiles can be deleted; built-in defaults are protected.
-- Added reset options for restoring one built-in prompt or all profile defaults.
+### Config-based prompt persistence
+- Built-in prompts are seeded once into config and preserved afterward.
+- Prompt edits are no longer overwritten when updating the add-on.
+- Missing built-in prompts/profiles are auto-backfilled non-destructively.
 
-### Per-profile field mapping
-- Field mapping is now tied to the selected profile.
-- Logical slots (e.g., Question, Choices, Answer, Text, Extra) are mapped to your Anki note type fields.
-- This supports note types with non-standard field names and mixed naming conventions.
+### Profile workflow improvements
+- Added **New Blank Profile** flow with a format selector (**MCQ**, **Cloze**, or **Basic**).
+- Duplicate profile workflow remains available for “copy and tweak”.
+- Built-in profiles are protected from deletion and can be reset to factory prompt text.
 
-### Import/runtime pipeline improvements
-- Parser dispatch now uses the active profile format (`mcq`, `cloze`, `basic`).
-- Imports show the active profile and selected note type before execution.
-- Model selection supports current Gemini families and API-discovered `generateContent` models.
-
-### Updated defaults
-- Default model updated to `gemini-2.5-flash-preview-05-20`.
-- Default auto-open media remains enabled (`true`).
-- Startup API validation remains optional (`false`).
+### Card-format support (including requested update)
+- **Basic note types are supported** via the Basic profile and per-profile field mapping.
+- **Cloze deletions are supported** via the Cloze profile parser and `{{c1::...}}` syntax guidance.
+- Parser dispatch uses the active profile format (`mcq`, `cloze`, `basic`) at runtime.
 
 ---
 
@@ -41,12 +33,12 @@ Version 4 introduces a **Prompt Profiles** system so you can generate different 
 
 - Guided first-run setup and settings dialog.
 - Gemini API key format checks and live connection tests.
-- Dynamic model discovery from Gemini API (`generateContent` capable models).
+- Dynamic model discovery from Gemini API (`generateContent`-capable models).
 - Batch import workflow with progress tracking and summary reporting.
 - Image validation with supported formats and max file-size checks.
 - Context-aware generation support for page-to-page continuity.
 - Automatic subdeck creation from parsed subtopics.
-- Profile-specific prompt editing and field mapping.
+- Profile-specific prompt editing and per-profile field mapping.
 
 ---
 
@@ -94,18 +86,17 @@ You can configure:
 
 ---
 
-## Default configuration
-
-The packaged defaults are:
+## Default packaged configuration
 
 - `model`: `gemini-2.5-flash-preview-05-20`
-- `note_type_id`: `null` (select in settings)
 - `active_profile`: `MCQ`
+- `profiles`: `MCQ`, `Cloze`, `Basic` with default field maps
+- `show_welcome`: `true`
 - `auto_open_media`: `true`
 - `batch_size`: `10`
 - `validate_api_on_startup`: `false`
 
-On upgrade from older versions, missing profile data is auto-migrated in runtime config.
+On startup, built-in prompts are seeded into config if missing.
 
 ---
 

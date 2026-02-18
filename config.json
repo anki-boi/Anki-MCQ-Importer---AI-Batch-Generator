@@ -1,10 +1,38 @@
 {
-    "api_key": "",
-    "model": "gemini-2.5-flash-preview-05-20",
-    "note_type_id": null,
-    "active_profile": "MCQ",
-    "show_welcome": true,
-    "auto_open_media": false,
-    "batch_size": 10,
-    "validate_api_on_startup": false
+  "api_key": "",
+  "model": "gemini-2.5-flash-preview-05-20",
+  "active_profile": "MCQ",
+  "profiles": {
+    "MCQ": {
+      "display_name": "Multiple Choice (MCQ)",
+      "format": "mcq",
+      "field_map": {
+        "question": "Question",
+        "choices": "Multiple Choice",
+        "answer": "Correct Answers",
+        "extra": "Extra"
+      }
+    },
+    "Cloze": {
+      "display_name": "Cloze Deletion",
+      "format": "cloze",
+      "field_map": {
+        "text": "Text",
+        "extra": "Extra"
+      }
+    },
+    "Basic": {
+      "display_name": "Basic (Front / Back)",
+      "format": "basic",
+      "field_map": {
+        "question": "Front",
+        "answer": "Back",
+        "extra": "Extra"
+      }
+    }
+  },
+  "show_welcome": true,
+  "auto_open_media": true,
+  "batch_size": 10,
+  "validate_api_on_startup": false
 }
