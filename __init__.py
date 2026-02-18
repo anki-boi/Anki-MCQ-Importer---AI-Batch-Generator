@@ -823,18 +823,35 @@ class FieldMappingWidget(QGroupBox):
         if not slots:
             layout.addRow(QLabel("No field mapping needed for this format.")); return
 
+        # Track claimed indices so fuzzy fallback avoids already-mapped fields
+        claimed: set = set()
+
         for slot_key, slot_label, slot_desc in slots:
             combo = QComboBox()
             combo.addItems(anki_fields)
             current = field_map.get(slot_key, "")
             idx = combo.findText(current)
             if idx >= 0:
+                # Exact match from saved config — always trust it
                 combo.setCurrentIndex(idx)
+                claimed.add(idx)
             elif anki_fields:
-                kw = slot_label.lower().split("/")[0].strip()
+                # Fuzzy: search all words in the label (skip tiny words)
+                kws = [w for w in re.split(r"[\s/()]+", slot_label.lower()) if len(w) > 2]
+                matched = -1
+                # Prefer unclaimed fields first
                 for i, f in enumerate(anki_fields):
-                    if kw in f.lower():
-                        combo.setCurrentIndex(i); break
+                    if i not in claimed and any(kw in f.lower() for kw in kws):
+                        matched = i; break
+                # Allow claimed fields if still nothing matched
+                if matched < 0:
+                    for i, f in enumerate(anki_fields):
+                        if any(kw in f.lower() for kw in kws):
+                            matched = i; break
+                # Only apply if a keyword actually matched — never silently pick index 0
+                if matched >= 0:
+                    combo.setCurrentIndex(matched)
+                    claimed.add(matched)
             lbl = QLabel(f"<b>{slot_label}</b><br><small>{slot_desc}</small>")
             lbl.setWordWrap(True)
             layout.addRow(lbl, combo)
