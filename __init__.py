@@ -162,21 +162,20 @@ Create a targeted yet comprehensive set of cloze deletion cards covering the mos
 **6. Examples:**
 
 ```
-Anti-Diabetes|The biguanide drug withdrawn from the market due to a high risk of fatal <b>lactic acidosis</b> is {{c1::Phenformin}}.|Rationale: Phenformin carries a significantly higher risk of lactic acidosis than metformin due to its structure causing greater inhibition of mitochondrial respiration.<br><br>Note: Metformin, the remaining biguanide, has a much lower risk and remains first-line therapy.
-Anti-Diabetes|<b>Insulin secretagogues</b> lower blood glucose by blocking {{c1::ATP-sensitive K+ channels}}, causing membrane {{c2::depolarization}} and subsequent insulin release.|Rationale: K+ channel blockade triggers Ca2+ influx via voltage-gated channels, which drives exocytosis of insulin granules from pancreatic β-cells.
-Anti-Diabetes|Classes of drugs used for <b>diabetes mellitus</b> include {{c1::Biguanides}}, {{c1::Thiazolidinediones}}, {{c1::Alpha-glucosidase inhibitors}}, {{c1::SGLT2 Inhibitors}}, and {{c1::Amylin Analogues}}.|Rationale: These represent the major oral/injectable hypoglycemic drug classes beyond insulin.<br><br>Mnemonic: <b>I</b>n <b>B</b>right <b>T</b>imes, <b>A</b>ll <b>I</b>ndividuals <b>S</b>hine <b>A</b>gain.
-Tannins|Plant sources notably rich in <b>tannins</b> include {{c1::Psidium guajava}} (Guava), {{c1::Hamamelis virginiana}} (Witch Hazel), {{c1::Quercus infectoria}} (Oak galls), and {{c1::Syzygium cumini}} (Java plum).|Rationale: These plants are exploited commercially for their astringent, antidiarrheal, and wound-healing properties derived from their high tannin content.
-Sesame oil|The primary <b>antioxidant lignan</b> constituents of Sesamum indicum are {{c1::Sesamol}} and {{c1::Sesamolin}}.|Rationale: These lignans contribute significantly to the exceptional oxidative stability of sesame oil and have demonstrated free radical scavenging activity in vitro.
-Zoonotic Diseases|<b>Rat-bite fever</b> is caused by either {{c1::Streptobacillus moniliformis}} or {{c1::Spirillum minus}}, depending on the geographic region.|Rationale: S. moniliformis predominates in North America (Haverhill fever), while S. minus is more common in Asia (Sodoku). Both are transmitted via rat bites or scratches.
+Anti-Diabetes|The biguanide drug withdrawn from the market due to a high risk of fatal <b>lactic acidosis</b> is {{c1::Phenformin}}.<br>|<br>Rationale: Phenformin carries a significantly higher risk of lactic acidosis than metformin due to its structure causing greater inhibition of mitochondrial respiration.<br><br>Note: Metformin, the remaining biguanide, has a much lower risk and remains first-line therapy.
+Anti-Diabetes|<b>Insulin secretagogues</b> lower blood glucose by blocking {{c1::ATP-sensitive K+ channels}}, causing membrane {{c2::depolarization}} and subsequent insulin release.<br>|<br>Rationale: K+ channel blockade triggers Ca2+ influx via voltage-gated channels, which drives exocytosis of insulin granules from pancreatic β-cells.
+Anti-Diabetes|Classes of drugs used for <b>diabetes mellitus</b> include {{c1::Biguanides}}, {{c1::Thiazolidinediones}}, {{c1::Alpha-glucosidase inhibitors}}, {{c1::SGLT2 Inhibitors}}, and {{c1::Amylin Analogues}}.<br>|<br>Rationale: These represent the major oral/injectable hypoglycemic drug classes beyond insulin.<br><br>Mnemonic: <b>I</b>n <b>B</b>right <b>T</b>imes, <b>A</b>ll <b>I</b>ndividuals <b>S</b>hine <b>A</b>gain.
+Tannins|Plant sources notably rich in <b>tannins</b> include {{c1::Psidium guajava}} (Guava), {{c1::Hamamelis virginiana}} (Witch Hazel), {{c1::Quercus infectoria}} (Oak galls), and {{c1::Syzygium cumini}} (Java plum).<br>|<br>Rationale: These plants are exploited commercially for their astringent, antidiarrheal, and wound-healing properties derived from their high tannin content.
+Sesame oil|The primary <b>antioxidant lignan</b> constituents of Sesamum indicum are {{c1::Sesamol}} and {{c1::Sesamolin}}.<br>|<br>Rationale: These lignans contribute significantly to the exceptional oxidative stability of sesame oil and have demonstrated free radical scavenging activity in vitro.
+Zoonotic Diseases|<b>Rat-bite fever</b> is caused by either {{c1::Streptobacillus moniliformis}} or {{c1::Spirillum minus}}, depending on the geographic region.<br>|<br>Rationale: S. moniliformis predominates in North America (Haverhill fever), while S. minus is more common in Asia (Sodoku). Both are transmitted via rat bites or scratches.
 ```
 """
 
-BASIC_PROMPT = """***
-
+BASIC_PROMPT = """
 ### ** PROMPT FOR BASIC (FRONT/BACK) CARD CREATION**
 
 **Objective:**
-Create a targeted yet comprehensive set of Basic flashcards covering the most high-yield aspects of the provided text. Each card has a Front (the question or cue) and a Back (the complete answer). The goal is maximum coverage with minimum redundancy — every card should test one specific, retrievable fact.
+Create a targeted yet comprehensive set of Basic flashcards covering the most high-yield aspects of the provided text. Each card has a Front (the question or cue) and a Back (the Answer followed by the Rationale). The goal is maximum coverage with minimum redundancy.
 
 **Key Instructions:**
 
@@ -190,7 +189,7 @@ Create a targeted yet comprehensive set of Basic flashcards covering the most hi
     6.  Common Names / Nicknames
     7.  Constituents
 - Create cards about other unique, testable facts found in the text, even if they don't fit the categories above.
-- Keep the card set lean. For reciprocal facts, prioritize the version that cues with the broader category and answers with the specific detail (e.g., Front: "Adverse effect unique to Phenformin vs. Metformin:" Back: "Fatal lactic acidosis").
+- Keep the card set lean. For reciprocal facts, prioritize the version that cues with the broader category and answers with the specific detail.
 - Ignore exercises and sample problems in the source text.
 
 **2. Front (Question/Cue) Phrasing (CRITICAL):**
@@ -201,36 +200,42 @@ Create a targeted yet comprehensive set of Basic flashcards covering the most hi
 - The Front must be specific enough that only one correct answer exists — avoid vague cues.
 - Mnemonics must NEVER appear on the Front.
 
-**3. Back (Answer) Phrasing:**
-- The Back should be the complete, minimal correct answer — not a paragraph.
-- For list answers (e.g., drug classes, constituents), use <br> to separate items vertically.
-- Use <b> to highlight the most important terms in the answer.
-- If the answer is a list, include ALL correct items from the source text.
+**3. Back (Answer & Rationale) Phrasing:**
+- **Structure:** The Back must strictly follow this format: **[Direct Answer]** + `<br><br>` + **[Rationale]**.
+- **The Direct Answer:** 
+    - Must come FIRST.
+    - Must be the concise, minimal correct answer (no paragraph). 
+    - Use <b> to highlight key terms. 
+    - For lists, use <br> to separate items.
+- **The Rationale:** 
+    - Must come SECOND (after the break).
+    - Label it clearly with `Rationale:`.
+    - Provide context, mechanism, or clinical significance here.
 - Avoid restating the Front verbatim in the Back.
 
 **4. AI Knowledge & Corrections:**
-- Stay within the provided text for creating cards, but use broader knowledge to enrich the Extra column.
-- Add a `Rationale:` to the Extra column whenever possible for context, mechanism, or clinical significance.
-- If you identify a factual error in the source text, create the card using the corrected information and note the correction in the Extra column.
+- Stay within the provided text for the *Direct Answer*, but use broader knowledge to enrich the *Rationale*.
+- If you identify a factual error in the source text, provide the corrected fact in the Answer and explain the correction in the Rationale.
+- Mnemonics should NOT go in the Rationale; put them in the **Extra** column.
 
 **5. Formatting & Structure:**
 - Use pipes `|` as separators.
 - Output format per line: Subtopic|Front|Back|Extra
 - Skip the header row.
 - Use HTML line breaks `<br>` for multi-line content within a column.
-- Mnemonics go ONLY in the Extra column — never on the Front or Back.
-- Image tags / references (if provided) are to be added at the bottom of the Extra column.
+- **Extra Column:** Use this column ONLY for Mnemonics and Images. If none exist, leave it empty.
 
 **6. Examples:**
 
 ```
-Anti-Diabetes|Classes of drugs for <b>diabetes mellitus</b>:|<b>Insulin secretagogues</b><br><b>Biguanides</b><br><b>Thiazolidinediones</b><br><b>Alpha-glucosidase inhibitors</b><br><b>Incretin-based drugs</b><br><b>SGLT2 Inhibitors</b><br><b>Amylin Analogues</b>|Rationale: These are the major pharmacological classes used for Type 2 DM management. Insulin itself is primary therapy for Type 1 DM.<br><br>Mnemonic: <b>I</b>n <b>B</b>right <b>T</b>imes, <b>A</b>ll <b>I</b>ndividuals <b>S</b>hine <b>A</b>gain.
-Anti-Diabetes|Mechanism of action of <b>Insulin Secretagogues</b>:|Blockade of <b>ATP-sensitive K+ channels</b> → membrane depolarization → Ca2+ influx → insulin exocytosis|Rationale: This cascade in pancreatic β-cells is the target of sulfonylureas and meglitinides. Depolarization opens voltage-gated Ca2+ channels, and the resulting Ca2+ surge triggers granule release.
-Anti-Diabetes|Biguanide withdrawn due to fatal <b>lactic acidosis</b> risk:|<b>Phenformin</b>|Rationale: Phenformin's chemical structure causes greater mitochondrial respiratory chain inhibition than metformin, leading to dangerous lactate accumulation. Withdrawn in the 1970s–80s in most countries.
-Tannins|Plant sources rich in <b>tannins</b>:|<b>Psidium guajava</b> (Guava)<br><b>Hamamelis virginiana</b> (Witch Hazel)<br><b>Quercus infectoria</b> (Oak galls)<br><b>Syzygium cumini</b> (Java plum)|Rationale: These plants are exploited for astringent, antidiarrheal, and wound-healing properties. High tannin content gives them commercial and medicinal value.
-Sesame oil|Primary antioxidant lignan constituents of <b>Sesamum indicum</b>:|<b>Sesamol</b><br><b>Sesamolin</b>|Rationale: These lignans give sesame oil its exceptional oxidative stability. Both have demonstrated free radical scavenging activity.
-Zoonotic Diseases|Causative organisms of <b>Rat-bite fever</b>:|<b>Streptobacillus moniliformis</b> (North America / Haverhill fever)<br><b>Spirillum minus</b> (Asia / Sodoku)|Rationale: Both are transmitted via rat bites or scratches. Geographic distribution guides diagnosis when culture is pending.
+Anti-Diabetes|Classes of drugs for <b>diabetes mellitus</b>:|<b>Insulin secretagogues</b><br><b>Biguanides</b><br><b>Thiazolidinediones</b><br><b>Alpha-glucosidase inhibitors</b><br><b>Incretin-based drugs</b><br><b>SGLT2 Inhibitors</b><br><b>Amylin Analogues</b><br><br>Rationale: These are the major pharmacological classes used for Type 2 DM management. Insulin itself is primary therapy for Type 1 DM.|Mnemonic: <b>I</b>n <b>B</b>right <b>T</b>imes, <b>A</b>ll <b>I</b>ndividuals <b>S</b>hine <b>A</b>gain.
+Anti-Diabetes|Mechanism of action of <b>Insulin Secretagogues</b>:|Blockade of <b>ATP-sensitive K+ channels</b> → membrane depolarization → Ca2+ influx → insulin exocytosis<br><br>Rationale: This cascade in pancreatic β-cells is the target of sulfonylureas and meglitinides. Depolarization opens voltage-gated Ca2+ channels, and the resulting Ca2+ surge triggers granule release.|
+Anti-Diabetes|Biguanide withdrawn due to fatal <b>lactic acidosis</b> risk:|<b>Phenformin</b><br><br>Rationale: Phenformin's chemical structure causes greater mitochondrial respiratory chain inhibition than metformin, leading to dangerous lactate accumulation. Withdrawn in the 1970s–80s in most countries.|
+Tannins|Plant sources rich in <b>tannins</b>:|<b>Psidium guajava</b> (Guava)<br><b>Hamamelis virginiana</b> (Witch Hazel)<br><b>Quercus infectoria</b> (Oak galls)<br><b>Syzygium cumini</b> (Java plum)<br><br>Rationale: These plants are exploited for astringent, antidiarrheal, and wound-healing properties. High tannin content gives them commercial and medicinal value.|
+Sesame oil|Primary antioxidant lignan constituents of <b>Sesamum indicum</b>:|<b>Sesamol</b><br><b>Sesamolin</b><br><br>Rationale: These lignans give sesame oil its exceptional oxidative stability. Both have demonstrated free radical scavenging activity.|
+Zoonotic Diseases|Causative organisms of <b>Rat-bite fever</b>:|<b>Streptobacillus moniliformis</b> (North America / Haverhill fever)<br><b>Spirillum minus</b> (Asia / Sodoku)<br><br>Rationale: Both are transmitted via rat bites or scratches. Geographic distribution guides diagnosis when culture is pending.|
 ```
+
 """
 
 # Logical field slot names — these are internal identifiers, not Anki field names
