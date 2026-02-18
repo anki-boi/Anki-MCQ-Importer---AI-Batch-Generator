@@ -1,8 +1,8 @@
-# Anki MCQ Importer - AI Batch Generator (v4.1.0)
+# Anki MCQ Importer - AI Batch Generator (v4.2.0)
 
 An Anki add-on that batch-processes folders of study images with Google Gemini and creates high-yield cards into organized subdecks.
 
-Version 4.1 keeps prompts in runtime config (so edits survive add-on updates) and supports three built-in card formats:
+Version 4.2 expands profile flexibility while keeping prompts in runtime config (so edits survive add-on updates) and supports three built-in card formats:
 
 - **MCQ** cards (Question / Multiple Choice / Correct Answers / Extra)
 - **Cloze Deletion** cards (Text / Extra)
@@ -10,7 +10,7 @@ Version 4.1 keeps prompts in runtime config (so edits survive add-on updates) an
 
 ---
 
-## What’s new in v4.1
+## What’s new in v4.2
 
 ### Config-based prompt persistence
 - Built-in prompts are seeded once into config and preserved afterward.
@@ -21,6 +21,11 @@ Version 4.1 keeps prompts in runtime config (so edits survive add-on updates) an
 - Added **New Blank Profile** flow with a format selector (**MCQ**, **Cloze**, or **Basic**).
 - Duplicate profile workflow remains available for “copy and tweak”.
 - Built-in profiles are protected from deletion and can be reset to factory prompt text.
+
+### Multiple profiles for each prompt format
+- You can now create and maintain **multiple prompt profiles per format** (MCQ, Cloze, and Basic).
+- This allows separate profile variants (e.g., exam-style vs. concise-review) without overwriting your defaults.
+- Active profile selection and per-profile field mapping are preserved per profile.
 
 ### Card-format support (including requested update)
 - **Basic note types are supported** via the Basic profile and per-profile field mapping.
