@@ -1511,18 +1511,49 @@ def run_importer():
                     deck_id = mw.col.decks.id(f"{root_deck}::{sub}")
                     note    = Note(mw.col, anki_model)
                     note.note_type()["did"] = deck_id
+
+                    # Build ordered (field_name, content) pairs for this format.
+                    # Order matters: first write wins priority, later writes append.
                     if fmt == "mcq":
-                        if fq: note[fq] = card.get(SLOT_QUESTION, "")
-                        if fc: note[fc] = card.get(SLOT_CHOICES,  "")
-                        if fa: note[fa] = card.get(SLOT_ANSWER,   "")
-                        if fe: note[fe] = card.get(SLOT_EXTRA,    "") + img_tag
+                        writes = [
+                            (fq, card.get(SLOT_QUESTION, "")),
+                            (fc, card.get(SLOT_CHOICES,  "")),
+                            (fa, card.get(SLOT_ANSWER,   "")),
+                            (fe, card.get(SLOT_EXTRA,    "") + img_tag),
+                        ]
                     elif fmt == "cloze":
-                        if ft: note[ft] = card.get(SLOT_TEXT,  "")
-                        if fe: note[fe] = card.get(SLOT_EXTRA, "") + img_tag
-                    else:
-                        if fq: note[fq] = card.get(SLOT_QUESTION, "")
-                        if fa: note[fa] = card.get(SLOT_ANSWER,   "")
-                        if fe: note[fe] = card.get(SLOT_EXTRA,    "") + img_tag
+                        writes = [
+                            (ft, card.get(SLOT_TEXT,  "")),
+                            (fe, card.get(SLOT_EXTRA, "") + img_tag),
+                        ]
+                    else:  # basic
+                        writes = [
+                            (fq, card.get(SLOT_QUESTION, "")),
+                            (fa, card.get(SLOT_ANSWER,   "")),
+                            (fe, card.get(SLOT_EXTRA,    "") + img_tag),
+                        ]
+
+                    # Merge: when two slots point to the same Anki field,
+                    # append the later content below the earlier one.
+                    field_content: Dict[str, str] = {}
+                    for field_name, content in writes:
+                        if not field_name:
+                            continue  # slot not mapped, skip
+                        stripped = content.strip()
+                        if not stripped or stripped == img_tag.strip():
+                            # Only write empty/bare-image content if field not yet touched
+                            if field_name not in field_content:
+                                field_content[field_name] = content
+                        elif field_name in field_content:
+                            existing = field_content[field_name].strip()
+                            sep = "<br><br>" if existing else ""
+                            field_content[field_name] = field_content[field_name] + sep + content
+                        else:
+                            field_content[field_name] = content
+
+                    for field_name, content in field_content.items():
+                        note[field_name] = content
+
                     mw.col.add_note(note, deck_id)
                     fc_count += 1; cards_created += 1
                 except Exception as e:
