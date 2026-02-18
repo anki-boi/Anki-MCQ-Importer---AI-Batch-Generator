@@ -1,10 +1,10 @@
 {
     "api_key": "",
-    "model": "gemini-3-flash-preview",
+    "model": "gemini-2.5-flash-preview-05-20",
     "note_type_id": null,
-    "github_repo": "anki-boi/True-Anki-MCQ-Note-Template",
+    "active_profile": "MCQ",
     "show_welcome": true,
-    "auto_open_media": false,
+    "auto_open_media": true,
     "batch_size": 10,
     "validate_api_on_startup": false
 }
