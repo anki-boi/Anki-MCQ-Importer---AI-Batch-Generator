@@ -1,15 +1,43 @@
-# Anki MCQ Importer - AI Batch Generator (v3.2.0)
+# Anki MCQ Importer - AI Batch Generator (v4.0.0)
 
-An Anki add-on that batch-processes folders of study images with Google Gemini and generates high-yield MCQ cards into organized subdecks.
+An Anki add-on that batch-processes folders of study images with Google Gemini and creates high-yield cards into organized subdecks.
 
-## What’s new in v3.2 (Fixed Edition)
+Version 4 introduces a **Prompt Profiles** system so you can generate different card formats from the same import pipeline:
 
-- API key validation now saves correctly and no longer repeatedly re-prompts.
-- Progress dialog can be closed with the window **X** button.
-- Note type flow uses manual installation guidance (download link only).
-- Updated Gemini defaults to Gemini 3 preview models.
+- **MCQ** cards (Question / Multiple Choice / Correct Answers / Extra)
+- **Cloze** cards (Text / Extra)
+- **Basic** cards (Front / Back / Extra)
 
-## Features
+---
+
+## What’s new in v4.0
+
+### Prompt Profiles (major)
+- Added profile-based generation with three built-in profiles: **MCQ**, **Cloze**, and **Basic**.
+- Each profile has its own tuned prompt and parser format.
+- You can edit prompt text directly in Settings.
+- You can duplicate and customize profiles for your own workflows.
+- Custom profiles can be deleted; built-in defaults are protected.
+- Added reset options for restoring one built-in prompt or all profile defaults.
+
+### Per-profile field mapping
+- Field mapping is now tied to the selected profile.
+- Logical slots (e.g., Question, Choices, Answer, Text, Extra) are mapped to your Anki note type fields.
+- This supports note types with non-standard field names and mixed naming conventions.
+
+### Import/runtime pipeline improvements
+- Parser dispatch now uses the active profile format (`mcq`, `cloze`, `basic`).
+- Imports show the active profile and selected note type before execution.
+- Model selection supports current Gemini families and API-discovered `generateContent` models.
+
+### Updated defaults
+- Default model updated to `gemini-2.5-flash-preview-05-20`.
+- Default auto-open media remains enabled (`true`).
+- Startup API validation remains optional (`false`).
+
+---
+
+## Core features
 
 - Guided first-run setup and settings dialog.
 - Gemini API key format checks and live connection tests.
@@ -17,23 +45,79 @@ An Anki add-on that batch-processes folders of study images with Google Gemini a
 - Batch import workflow with progress tracking and summary reporting.
 - Image validation with supported formats and max file-size checks.
 - Context-aware generation support for page-to-page continuity.
+- Automatic subdeck creation from parsed subtopics.
+- Profile-specific prompt editing and field mapping.
+
+---
+
+## Prompt profile formats
+
+### 1) MCQ profile
+Expected output columns:
+
+`Subtopic | Question | Multiple Choice | Correct Answers | Extra`
+
+### 2) Cloze profile
+Expected output columns:
+
+`Subtopic | Text | Extra`
+
+### 3) Basic profile
+Expected output columns:
+
+`Subtopic | Front | Back | Extra`
+
+> Notes:
+> - `Subtopic` is used for target subdeck naming.
+> - `Extra` is used for rationale/mnemonics/additional context.
+> - For multiline cell content, prompts use HTML `<br>` line breaks.
+
+---
+
+## Settings overview
+
+Open settings in Anki:
+
+**Tools → ⚡ Anki MCQ Importer - AI Batch Generator → ⚙ Settings**
+
+You can configure:
+
+- Gemini API key
+- Gemini model (manual or refreshed from API)
+- Active prompt profile
+- Profile prompt text
+- Per-profile field mapping
+- Note type used for import
+- Batch size
+- Auto-open media folder after import
+- Validate API key/model on startup
+
+---
 
 ## Default configuration
 
-Current defaults in this repository:
+The packaged defaults are:
 
-- Model: `gemini-3-flash-preview`
-- Batch size: `10`
-- API validation on startup: `false`
-- Note type repo: `anki-boi/True-Anki-MCQ-Note-Template`
-- Note type download URL: `https://github.com/anki-boi/True-Anki-MCQ-Note-Template/releases/latest`
+- `model`: `gemini-2.5-flash-preview-05-20`
+- `note_type_id`: `null` (select in settings)
+- `active_profile`: `MCQ`
+- `auto_open_media`: `true`
+- `batch_size`: `10`
+- `validate_api_on_startup`: `false`
+
+On upgrade from older versions, missing profile data is auto-migrated in runtime config.
+
+---
 
 ## Repository contents
 
 - `__init__.py` — Main add-on implementation loaded by Anki.
-- `config.json` — Default add-on configuration.
-- `manifest.json` — Add-on package metadata.
+- `config.json` — Packaged default config for fresh installs.
+- `manifest.json` — Add-on metadata and packaged default config.
 - `build.py` — Build script to create `.ankiaddon` packages.
+- `README.md` — Project documentation.
+
+---
 
 ## Build package
 
@@ -46,6 +130,8 @@ On success, the build script generates:
 - `anki_mcq_importer_ai_batch_generator_v<version>.ankiaddon`
 - `RELEASE_NOTES_v<version>.md`
 
+---
+
 ## Install in Anki (manual)
 
 1. Build or download the `.ankiaddon` file.
@@ -53,24 +139,15 @@ On success, the build script generates:
 3. Select the `.ankiaddon` file.
 4. Restart Anki.
 
-## Configuration
-
-Open settings from Anki:
-
-**Tools → ⚡ Anki MCQ Importer - AI Batch Generator → ⚙ Settings**
-
-Then set:
-
-- Gemini API key
-- Gemini model
-- Note type
-- Advanced import options
+---
 
 ## Requirements
 
 - Anki 2.1.45+
 - Internet access
 - Google Gemini API key
+
+---
 
 ## Disclaimer
 
