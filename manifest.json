@@ -1,8 +1,8 @@
 {
   "package": "anki_mcq_importer_ai_batch_generator",
   "name": "Anki MCQ Importer - AI Batch Generator",
-  "description": "Batch-generate Anki cards from image folders using Gemini with prompt profiles (MCQ, Cloze, Basic), per-profile field mapping, and progress tracking.",
-  "version": "4.0.0",
+  "description": "Batch-generate Anki cards from image folders using Gemini with prompt profiles (MCQ, Cloze, Basic), config-based prompt persistence, per-profile field mapping, and progress tracking.",
+  "version": "4.1.0",
   "mod": 1760832000,
   "min_point_version": 45,
   "max_point_version": 99,
@@ -10,8 +10,36 @@
   "config": {
     "api_key": "",
     "model": "gemini-2.5-flash-preview-05-20",
-    "note_type_id": null,
     "active_profile": "MCQ",
+    "profiles": {
+      "MCQ": {
+        "display_name": "Multiple Choice (MCQ)",
+        "format": "mcq",
+        "field_map": {
+          "question": "Question",
+          "choices": "Multiple Choice",
+          "answer": "Correct Answers",
+          "extra": "Extra"
+        }
+      },
+      "Cloze": {
+        "display_name": "Cloze Deletion",
+        "format": "cloze",
+        "field_map": {
+          "text": "Text",
+          "extra": "Extra"
+        }
+      },
+      "Basic": {
+        "display_name": "Basic (Front / Back)",
+        "format": "basic",
+        "field_map": {
+          "question": "Front",
+          "answer": "Back",
+          "extra": "Extra"
+        }
+      }
+    },
     "show_welcome": true,
     "auto_open_media": true,
     "batch_size": 10,
